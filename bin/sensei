@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+from sensei import Api
+import argparse
+import os
+import json
+
+CONF_PATH = os.path.expanduser("~/.sensei")
+
+
+def get_conf():
+    if os.path.isfile(CONF_PATH):
+        return json.load(open(CONF_PATH))
+    return {}
+
+def write_conf(conf):
+    json.dump(conf, open(CONF_PATH, "w"), indent=4)
+
+
+if  __name__=='__main__':
+    parser = argparse.ArgumentParser("Sensei Robotics CLI")
+    parser.add_argument("--key", help="Set global API Key")
+    parser.add_argument("--ls", metavar="PATH", nargs="?", const="/", help="List contents of given path")
+    parser.add_argument("-o", "--out", metavar="DIR", default="sensei-data", help="Directory to write files to")
+    parser.add_argument("-d", "--download", metavar="PATH", nargs="?", const="/", help="Download resource at given path."
+                        " If no argument given, download everything. To download directory, use --recursive")
+    parser.add_argument("-r", "--recursive", action="store_true", help="Recursively download files in given directory."
+                        " Use in conjunction with --download")
+    parser.add_argument("-w", "--overwrite", action="store_true", help="Overwrite existing files in destination dir")
+    
+
+    args = parser.parse_args()
+
+    conf = get_conf()
+
+    if args.key:
+        print("Writing API key to", CONF_PATH)
+        conf["key"] = args.key
+        write_conf(conf)
+    
+    destination_path = os.path.abspath(args.out)
+
+    if not conf.get("key"):
+        print("No API Key found")
+        conf["key"] = input("Enter your API Key: ").strip()
+        if not conf["key"]:
+            exit()
+        write_conf(conf)
+    
+    api = Api(conf["key"], destination=destination_path)
+
+    if args.ls:
+        result_count = 0
+        for e in api.iter_dirs(args.ls):
+            print("(DIR)", e["path"])
+            result_count += 1
+        for e in api.iter_files(args.ls):
+            print(e["filename"])
+            result_count += 1
+        
+        print()
+        print(result_count, "results")
+
+    if args.download:
+        if args.recursive:
+            print(f"Recursively downloading from {args.download} into {destination_path}...")
+            file_found = api.recursive_download(path=args.download, overwrite=args.overwrite)
+            if not file_found:
+                print("Warning: folder is empty or doesn't exist")
+        else:
+            print(f"Downloading file {args.download} into {destination_path}...")
+            try:
+                api.download_file_from_path(args.download, overwrite=args.overwrite)
+            except FileNotFoundError:
+                print("Warning: file not found")
+
+
+
+
+
